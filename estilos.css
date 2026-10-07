@@ -141,3 +141,34 @@ body.modal-open{overflow:hidden}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes slideUp{from{transform:translateY(100%);opacity:.5}to{transform:translateY(0);opacity:1}}
 @keyframes popIn{from{transform:scale(.94);opacity:0}to{transform:scale(1);opacity:1}}
+
+/* ---------- Pedidos en el panel ---------- */
+.pedido-card{
+  background:#fff;
+  border:1px solid #e6dcf3;
+  border-left:5px solid var(--plum);
+  border-radius:14px;
+  padding:14px 16px;
+  margin-bottom:12px;
+}
+.pedido-head{
+  display:flex;justify-content:space-between;align-items:flex-start;
+  gap:12px;margin-bottom:10px;flex-wrap:wrap;
+}
+.pedido-info{
+  display:grid;gap:6px;font-size:.95rem;color:#3c2a4d;
+  margin-bottom:12px;
+}
+.pedido-info b{color:var(--plum)}
+.pedido-acts{
+  display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+  padding-top:10px;border-top:1px solid #f0e9f6;
+}
+.pedido-acts select{
+  padding:8px 12px;border:2px solid var(--lila);border-radius:10px;
+  background:#fff;font-weight:600;color:var(--plum);
+}
+.chip-nuevo{background:#fff3cd;color:#8a6d1e;border:0;padding:4px 12px;border-radius:999px;font-weight:700;font-size:.8rem}
+.chip-prep{background:#cfe4ff;color:#1e4d8a;border:0;padding:4px 12px;border-radius:999px;font-weight:700;font-size:.8rem}
+.chip-ok{background:#c9f0d3;color:#1e6b32;border:0;padding:4px 12px;border-radius:999px;font-weight:700;font-size:.8rem}
+.chip-cancel{background:#f5d0d0;color:#8a1e1e;border:0;padding:4px 12px;border-radius:999px;font-weight:700;font-size:.8rem}

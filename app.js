@@ -30,7 +30,7 @@ return DEFAULTS();
 function loadCart(){try{return JSON.parse(localStorage.getItem(CARTKEY))||{}}catch(e){return{}}}
 let data=load(), cart=loadCart();
 let adminOK=false, tab="productos", editing=null, pendingImg=null, pendingFoto=null, filtro="";
-let ped={nombre:"",fecha:"",hora:"",notas:""};
+let ped={nombre:"",telefono:"",fecha:"",hora:"",notas:""};
 
 // ============================================
 // CARGA DE DATOS DESDE SUPABASE
@@ -206,6 +206,7 @@ ${items.map(({p,q})=>`<div class="line">${ph(p)}<div><b>${esc(p.nombre)}</b><spa
 <div class="total"><span>Total</span><span>${money(total)}</span></div>
 <section class="box"><h2>Datos de tu pedido</h2>
 <label class="field"><span>Tu nombre</span><input data-ped="nombre" value="${esc(ped.nombre)}" autocomplete="name"></label>
+<label class="field"><span>Tu teléfono</span><input data-ped="telefono" value="${esc(ped.telefono)}" inputmode="tel" autocomplete="tel" placeholder="+53 5123 4567"></label>
 <div class="row2">
 <label class="field"><span>Fecha</span><input type="date" data-ped="fecha" min="${hoy()}" value="${esc(ped.fecha)}"></label>
 <label class="field"><span>Hora</span><input type="time" data-ped="hora" value="${esc(ped.hora)}"></label>
@@ -230,7 +231,7 @@ app.innerHTML=head("Administrar")+`<main class="page" style="max-width:420px"><s
 <p class="note" style="margin-top:14px">Usa el usuario que creaste en Supabase.</p></section></main>`;
 return;
 }
-const tabs=[["productos","Productos"],["categorias","Categorías"],["ajustes","Ajustes"]];
+const tabs=[["productos","Productos"],["categorias","Categorías"],["pedidos","Pedidos"],["ajustes","Ajustes"]];
 app.innerHTML=head("Panel")+`<main class="page" style="max-width:700px">
 <p class="note">Los cambios se guardan en la nube.</p>
 <div class="tabs">${tabs.map(t=>`<button class="chip" data-a="tab" data-id="${t[0]}" aria-pressed="${tab===t[0]}">${t[1]}</button>`).join("")}
@@ -239,6 +240,7 @@ app.innerHTML=head("Panel")+`<main class="page" style="max-width:700px">
 const tb=$("#tabbody");
 if(tab==="productos")tb.innerHTML=editing!==null?formProd():listaProd();
 if(tab==="categorias")tb.innerHTML=catsHtml();
+if(tab==="pedidos")tb.innerHTML = await pedidosHtml();
 if(tab==="ajustes")tb.innerHTML=ajustesHtml();
 }
 function listaProd(){
@@ -261,6 +263,82 @@ return `<section class="box"><h2>${nuevo?"Nuevo producto":"Editar producto"}</h2
 <img id="fPrev" class="preview" alt="Vista previa de la foto" ${p.img?`src="${p.img}"`:'hidden'}>
 <small id="fMsg">${p.img?"Toca \"Elegir foto\" para cambiarla.":"Toca \"Elegir foto\" y escoge una de tu galería."}</small></div>
 <div class="acts"><button class="btn" data-a="saveprod">Guardar</button><button class="btn btn-line" data-a="cancelprod">Cancelar</button></div></section>`;
+}
+async function pedidosHtml(){
+  const { data: pedidos, error } = await sb
+    .from("pedidos")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if(error){
+    return `<section class="box"><p>Error cargando pedidos: ${esc(error.message)}</p></section>`;
+  }
+
+  if(!pedidos || !pedidos.length){
+    return `<section class="box"><h2>Pedidos</h2><p>Aún no hay pedidos registrados.</p></section>`;
+  }
+
+  const fechaHora = (iso) => {
+    const d = new Date(iso);
+    return d.toLocaleString("es", {
+      day:"2-digit", month:"2-digit", year:"numeric",
+      hour:"2-digit", minute:"2-digit"
+    });
+  };
+
+  const etiquetas = {
+    nuevo: { txt: "Nuevo", clase: "chip chip-nuevo" },
+    en_preparacion: { txt: "En preparación", clase: "chip chip-prep" },
+    entregado: { txt: "Entregado", clase: "chip chip-ok" },
+    cancelado: { txt: "Cancelado", clase: "chip chip-cancel" }
+  };
+
+  return `<section class="box"><h2>Pedidos (${pedidos.length})</h2>
+  <p style="margin:0 0 14px;color:#5b4a69;font-size:.9rem">Los más recientes aparecen primero.</p>
+  ${pedidos.map(p => {
+    const estado = p.estado || "nuevo";
+    const et = etiquetas[estado] || etiquetas.nuevo;
+    const fecha = p.fecha_entrega ? p.fecha_entrega.split("-").reverse().join("/") : "";
+    const hora = p.hora_entrega ? hora12(p.hora_entrega) : "";
+
+    const listaProd = Array.isArray(p.productos)
+      ? p.productos.map(x => `• ${x.cantidad}× ${esc(x.nombre)} — ${Number(x.subtotal).toLocaleString("es")} ${esc(p.moneda)}`).join("<br>")
+      : "—";
+
+    const telLimpio = (p.cliente_telefono || "").replace(/\D/g,"");
+    const waCliente = telLimpio ? `https://wa.me/${telLimpio}` : "";
+
+    return `<div class="pedido-card">
+      <div class="pedido-head">
+        <div>
+          <b style="font-size:1.05rem">${esc(p.cliente_nombre)}</b>
+          <div style="color:#5b4a69;font-size:.9rem">
+            📱 ${esc(p.cliente_telefono)}
+            ${waCliente ? ` · <a href="${waCliente}" target="_blank" rel="noopener" style="color:var(--wa);font-weight:700">Abrir WhatsApp</a>` : ""}
+          </div>
+        </div>
+        <span class="${et.clase}">${et.txt}</span>
+      </div>
+
+      <div class="pedido-info">
+        <div><b>Entrega:</b> ${fecha} a las ${hora}</div>
+        <div><b>Total:</b> <span class="price">${Number(p.total).toLocaleString("es")} ${esc(p.moneda)}</span></div>
+        <div><b>Pedido:</b><br>${listaProd}</div>
+        ${p.notas ? `<div><b>Notas:</b> ${esc(p.notas)}</div>` : ""}
+        <div style="color:#9a8aa8;font-size:.82rem">Registrado el ${fechaHora(p.created_at)}</div>
+      </div>
+
+      <div class="acts pedido-acts">
+        <select data-change="estado" data-id="${p.id}">
+          ${["nuevo","en_preparacion","entregado","cancelado"].map(e =>
+            `<option value="${e}" ${e === estado ? "selected" : ""}>${etiquetas[e].txt}</option>`
+          ).join("")}
+        </select>
+        <button class="btn btn-sm btn-danger" data-a="delpedido" data-id="${p.id}" data-nombre="${esc(p.cliente_nombre)}">Borrar</button>
+      </div>
+    </div>`;
+  }).join("")}
+  </section>`;
 }
 function catsHtml(){
 return `<section class="box"><h2>Categorías</h2>
@@ -308,20 +386,67 @@ async clear(){
   draw();
 },
 filtro(id){filtro=id;draw();window.scrollTo(0,0)},
-send(){
-const items=cartItems();
-if(!items.length)return toast("Tu carrito está vacío.");
-if(!ped.nombre.trim())return toast("Escribe tu nombre.");
-if(!ped.fecha)return toast("Elige la fecha en que quieres tu pedido.");
-if(ped.fecha<hoy())return toast("Esa fecha ya pasó. Elige otra.");
-if(!ped.hora)return toast("Elige la hora.");
-const total=items.reduce((a,x)=>a+x.p.precio*x.q,0);
-const msg=`Hola, quiero hacer un pedido en ${data.settings.nombre}:\n\n`+
-items.map(x=>`• ${x.q} x ${x.p.nombre} – ${money(x.p.precio*x.q)}`).join("\n")+
-`\n\nTotal: ${money(total)}\n\nNombre: ${ped.nombre.trim()}\nFecha: ${fecha(ped.fecha)}\nHora: ${hora12(ped.hora)}`+
-(ped.notas.trim()?`\nNotas: ${ped.notas.trim()}`:"");
-window.open(`https://wa.me/${waPedidos()}?text=${encodeURIComponent(msg)}`,"_blank","noopener");
-toast("Se abrió WhatsApp: toca enviar para confirmar tu pedido.");
+async send(){
+  const items = cartItems();
+  if(!items.length) return toast("Tu carrito está vacío.");
+  if(!ped.nombre.trim()) return toast("Escribe tu nombre.");
+  if(!ped.telefono.trim()) return toast("Escribe tu teléfono.");
+  if(!ped.fecha) return toast("Elige la fecha en que quieres tu pedido.");
+  if(ped.fecha < hoy()) return toast("Esa fecha ya pasó. Elige otra.");
+  if(!ped.hora) return toast("Elige la hora.");
+
+  const total = items.reduce((a,x)=>a+x.p.precio*x.q, 0);
+
+  // 1) Construir el mensaje de WhatsApp
+  const msg = `Hola, quiero hacer un pedido en ${data.settings.nombre}:\n\n` +
+    items.map(x=>`• ${x.q} x ${x.p.nombre} – ${money(x.p.precio*x.q)}`).join("\n") +
+    `\n\nTotal: ${money(total)}\n\n` +
+    `Nombre: ${ped.nombre.trim()}\n` +
+    `Teléfono: ${ped.telefono.trim()}\n` +
+    `Fecha: ${fecha(ped.fecha)}\n` +
+    `Hora: ${hora12(ped.hora)}` +
+    (ped.notas.trim() ? `\nNotas: ${ped.notas.trim()}` : "");
+
+  const waUrl = `https://wa.me/${waPedidos()}?text=${encodeURIComponent(msg)}`;
+
+  // 2) Guardar en Supabase ANTES de abrir WhatsApp
+  const payload = {
+    cliente_nombre: ped.nombre.trim(),
+    cliente_telefono: ped.telefono.trim(),
+    fecha_entrega: ped.fecha,
+    hora_entrega: ped.hora,
+    notas: ped.notas.trim() || null,
+    productos: items.map(x => ({
+      id: x.p.id,
+      nombre: x.p.nombre,
+      cantidad: x.q,
+      precio: x.p.precio,
+      subtotal: x.p.precio * x.q
+    })),
+    total,
+    moneda: data.settings.moneda,
+    whatsapp_url: waUrl,
+    estado: "nuevo"
+  };
+
+  try{
+    const { error } = await sb.from("pedidos").insert(payload);
+    if(error) throw error;
+  }catch(err){
+    console.error("Error guardando pedido:", err);
+    toast("No se pudo guardar en el historial, pero se abrirá WhatsApp.");
+  }
+
+  // 3) Abrir WhatsApp
+  window.open(waUrl, "_blank", "noopener");
+
+  // 4) Limpiar carrito y datos del pedido
+  cart = {};
+  saveCart();
+  ped = { nombre:"", telefono:"", fecha:"", hora:"", notas:"" };
+
+  toast("Pedido enviado. ¡Gracias!");
+  draw();
 },
 async login(){
   const email = ($("#email")?.value || "").trim();
@@ -466,6 +591,23 @@ async delcat(id, boton){
   toast("Categoría borrada de la nube");
   draw();
 },
+async delpedido(id){
+  const ok = await confirmar(
+    "Borrar pedido",
+    "¿Seguro que quieres borrar este pedido del historial? Esta acción no se puede deshacer.",
+    "Sí, borrar"
+  );
+  if(!ok) return;
+
+  const { error } = await sb.from("pedidos").delete().eq("id", Number(id));
+  if(error){
+    toast("Error borrando: " + error.message);
+    return;
+  }
+
+  toast("Pedido borrado");
+  draw();
+},
 async savesettings(){
   const upd = {
     nombre: $("#sNombre").value.trim() || data.settings.nombre,
@@ -519,6 +661,19 @@ if(k==="agotado"){
     }
     await cargarDesdeSupabase();
     toast(agotado ? "Marcado como agotado" : "Disponible de nuevo");
+    draw();
+  })();
+}
+if(k==="estado"){
+  const id = t.dataset.id;
+  const nuevoEstado = t.value;
+  (async () => {
+    const { error } = await sb.from("pedidos").update({ estado: nuevoEstado }).eq("id", Number(id));
+    if(error){
+      toast("Error actualizando: " + error.message);
+      return;
+    }
+    toast("Estado actualizado");
     draw();
   })();
 }
