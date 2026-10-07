@@ -172,3 +172,140 @@ body.modal-open{overflow:hidden}
 .chip-prep{background:#cfe4ff;color:#1e4d8a;border:0;padding:4px 12px;border-radius:999px;font-weight:700;font-size:.8rem}
 .chip-ok{background:#c9f0d3;color:#1e6b32;border:0;padding:4px 12px;border-radius:999px;font-weight:700;font-size:.8rem}
 .chip-cancel{background:#f5d0d0;color:#8a1e1e;border:0;padding:4px 12px;border-radius:999px;font-weight:700;font-size:.8rem}
+
+/* ---------- Estrellas ---------- */
+.estrellas{
+  display:inline-flex;gap:2px;line-height:1;
+  font-size:1rem;letter-spacing:1px;
+  color:#c9a24b; /* dorado */
+  user-select:none;
+}
+.estrellas .off{color:#e0d6ec}
+.rating-line{
+  display:flex;align-items:center;gap:6px;
+  margin-top:4px;font-size:.85rem;color:#7a6889;
+  cursor:pointer;
+}
+.rating-line b{color:var(--plum)}
+
+/* Estrellas clicables en el formulario */
+.estrellas-input{
+  display:inline-flex;gap:4px;
+  font-size:2rem;line-height:1;cursor:pointer;
+}
+.estrellas-input span{
+  color:#e0d6ec;transition:color .1s,transform .1s;
+}
+.estrellas-input span.on{color:#e5b435}
+.estrellas-input span:hover{transform:scale(1.15)}
+
+/* ---------- Modal de producto (bottom sheet en móvil) ---------- */
+.prod-modal{
+  position:fixed;inset:0;
+  background:rgba(42,24,56,.6);
+  display:flex;align-items:flex-end;justify-content:center;
+  z-index:90;padding:0;
+  animation:fadeIn .15s ease-out;
+  overscroll-behavior:contain;
+}
+.prod-modal-inner{
+  background:#fff;width:100%;max-width:640px;
+  max-height:92vh;overflow-y:auto;
+  border-radius:24px 24px 0 0;
+  animation:slideUp .25s ease-out;
+  padding-bottom:calc(20px + env(safe-area-inset-bottom,0px));
+}
+.prod-modal .cerrar{
+  position:sticky;top:8px;
+  margin:12px 12px 0 auto;display:block;
+  width:36px;height:36px;border-radius:50%;
+  background:#fff;border:1px solid #e6dcf3;
+  font-size:1.2rem;line-height:1;cursor:pointer;
+  color:var(--plum);z-index:2;
+  box-shadow:0 2px 8px rgba(0,0,0,.08);
+}
+.prod-modal .hero-img{
+  aspect-ratio:1/1;background:linear-gradient(135deg,var(--lila),var(--rose));
+  display:flex;align-items:center;justify-content:center;
+  font-size:5rem;color:#fff;
+}
+.prod-modal .hero-img img{width:100%;height:100%;object-fit:cover}
+.prod-modal .content{padding:18px 20px 0}
+.prod-modal h2{font-size:1.5rem;color:var(--plum);margin-bottom:6px}
+.prod-modal .precio{font-size:1.3rem;color:var(--plum);font-weight:700;margin:8px 0}
+.prod-modal .desc{color:#5b4a69;font-size:.98rem;margin:10px 0 16px}
+
+.prod-actions{
+  display:flex;gap:10px;margin:14px 0 22px;
+}
+.prod-actions .btn{flex:1}
+
+.resenas-seccion{
+  border-top:1px solid #f0e9f6;
+  padding:18px 20px 0;
+}
+.resenas-seccion h3{
+  font-size:1.1rem;color:var(--plum);margin-bottom:12px;
+}
+.resenas-lista{
+  display:grid;gap:12px;margin-bottom:20px;
+}
+.resena-item{
+  background:#faf7fd;border-radius:12px;
+  padding:12px 14px;
+}
+.resena-head{
+  display:flex;justify-content:space-between;align-items:flex-start;
+  gap:10px;margin-bottom:4px;
+}
+.resena-head b{color:var(--plum);font-size:.95rem}
+.resena-fecha{color:#9a8aa8;font-size:.78rem}
+.resena-texto{
+  color:#3c2a4d;font-size:.92rem;margin-top:6px;
+  line-height:1.45;
+}
+
+.form-resena{
+  background:#faf7fd;border-radius:14px;
+  padding:16px;margin-bottom:20px;
+}
+.form-resena h4{
+  font-size:1rem;color:var(--plum);margin-bottom:10px;
+}
+.form-resena .field{margin-bottom:10px}
+.estrellas-label{
+  display:block;font-weight:700;font-size:.95rem;margin-bottom:6px;
+}
+
+.sin-resenas{
+  color:#7a6889;font-size:.92rem;text-align:center;
+  padding:16px 8px;background:#faf7fd;border-radius:12px;
+  margin-bottom:20px;
+}
+
+@media(min-width:640px){
+  .prod-modal{align-items:center;padding:24px}
+  .prod-modal-inner{
+    border-radius:20px;max-height:88vh;
+    animation:popIn .22s ease-out;
+  }
+  .prod-modal .cerrar{position:absolute;right:12px;top:12px}
+}
+
+/* ---------- Admin reseñas ---------- */
+.resumen-resenas{
+  background:#faf7fd;border-radius:14px;padding:18px;
+  margin-bottom:20px;
+}
+.dist-estrellas{display:grid;gap:6px}
+.dist-row{
+  display:flex;align-items:center;gap:10px;
+  font-size:.9rem;color:#3c2a4d;
+}
+.dist-bar{
+  flex:1;height:8px;background:#e8dff2;
+  border-radius:999px;overflow:hidden;
+}
+.dist-fill{
+  height:100%;background:linear-gradient(90deg,#e5b435,#f6d76b);
+}

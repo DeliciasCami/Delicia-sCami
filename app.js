@@ -29,6 +29,7 @@ return DEFAULTS();
 }
 function loadCart(){try{return JSON.parse(localStorage.getItem(CARTKEY))||{}}catch(e){return{}}}
 let data=load(), cart=loadCart();
+data.resenasPorProducto = {};
 let adminOK=false, tab="productos", editing=null, pendingImg=null, pendingFoto=null, filtro="";
 let ped={nombre:"",telefono:"",fecha:"",hora:"",notas:""};
 
@@ -37,14 +38,16 @@ let ped={nombre:"",telefono:"",fecha:"",hora:"",notas:""};
 // ============================================
 async function cargarDesdeSupabase(){
   try{
-    const [cats, prods, sett] = await Promise.all([
+    const [cats, prods, sett, res] = await Promise.all([
       sb.from("categorias").select("*").order("orden"),
       sb.from("productos").select("*").order("created_at"),
-      sb.from("settings").select("*").eq("id", 1).single()
+      sb.from("settings").select("*").eq("id", 1).single(),
+      sb.from("resenas").select("*").order("created_at", { ascending: false })
     ]);
     if(cats.error) throw cats.error;
     if(prods.error) throw prods.error;
     if(sett.error) throw sett.error;
+    if(res.error) throw res.error;
 
     const base = DEFAULTS();
     data.categorias = cats.data.map(c => c.nombre);
@@ -71,6 +74,15 @@ async function cargarDesdeSupabase(){
       moneda: sett.data.moneda || "CUP",
       foto: sett.data.foto_url || ""
     };
+
+    // Agrupar reseñas por producto
+    data.resenasPorProducto = {};
+    for(const r of res.data){
+      const key = String(r.producto_id);
+      if(!data.resenasPorProducto[key]) data.resenasPorProducto[key] = [];
+      data.resenasPorProducto[key].push(r);
+    }
+
     return true;
   }catch(err){
     toast("Error de conexión: " + err.message);
@@ -105,7 +117,9 @@ function confirmar(titulo, mensaje, textoBoton = "Sí, borrar"){
 
     const cerrar = (valor) => {
       overlay.remove();
-      document.body.classList.remove("modal-open");
+      if(!document.querySelector(".prod-modal") && !document.querySelector(".modal-overlay")){
+        document.body.classList.remove("modal-open");
+      }
       document.removeEventListener("keydown", onKey);
       resolve(valor);
     };
@@ -149,6 +163,169 @@ function head(titulo){
 return `<header class="top"><a href="#inicio">← Inicio</a><strong>${titulo}</strong><a href="#carrito">Carrito <span class="badge" data-count hidden></span></a></header>`;
 }
 function ph(p){return `<div class="ph">${p.img?`<img src="${p.img}" alt="${esc(p.nombre)}" loading="lazy">`:"🧁"}${p.agotado?'<span class="sold">Agotado</span>':""}</div>`}
+
+/* ---------- Helpers de reseñas ---------- */
+function resenasDe(prodId){
+  return data.resenasPorProducto[String(prodId)] || [];
+}
+function promedioEstrellas(prodId){
+  const rs = resenasDe(prodId);
+  if(!rs.length) return 0;
+  const suma = rs.reduce((a, r) => a + r.estrellas, 0);
+  return suma / rs.length;
+}
+function estrellasHTML(n, redondear = true){
+  const val = redondear ? Math.round(n) : n;
+  let html = '<span class="estrellas" aria-label="' + n.toFixed(1) + ' de 5">';
+  for(let i = 1; i <= 5; i++){
+    html += i <= val ? "★" : '<span class="off">★</span>';
+  }
+  html += "</span>";
+  return html;
+}
+function lineaRating(prodId){
+  const rs = resenasDe(prodId);
+  const prom = promedioEstrellas(prodId);
+  if(!rs.length) return `<div class="rating-line" data-stop="1" data-a="abrirProducto" data-id="${prodId}">Sin reseñas · <b>Sé el primero</b></div>`;
+  return `<div class="rating-line" data-stop="1" data-a="abrirProducto" data-id="${prodId}">${estrellasHTML(prom)} <b>${prom.toFixed(1)}</b> · ${rs.length} reseña${rs.length === 1 ? "" : "s"}</div>`;
+}
+function yaReseno(prodId){
+  try{
+    const arr = JSON.parse(localStorage.getItem("deliciascami_resenas") || "[]");
+    return arr.includes(String(prodId));
+  }catch(e){ return false; }
+}
+function marcarResenado(prodId){
+  try{
+    const arr = JSON.parse(localStorage.getItem("deliciascami_resenas") || "[]");
+    if(!arr.includes(String(prodId))) arr.push(String(prodId));
+    localStorage.setItem("deliciascami_resenas", JSON.stringify(arr));
+  }catch(e){}
+}
+
+/* ---------- Modal de producto ---------- */
+function abrirProducto(prodId){
+  const p = data.productos.find(x => String(x.id) === String(prodId));
+  if(!p) return;
+
+  const rs = resenasDe(prodId);
+  const prom = promedioEstrellas(prodId);
+  const puedeResenar = !yaReseno(prodId);
+
+  const resenasHTML = rs.length
+    ? rs.map(r => `
+      <div class="resena-item">
+        <div class="resena-head">
+          <div><b>${esc(r.nombre)}</b> ${estrellasHTML(r.estrellas, false)}</div>
+          <span class="resena-fecha">${new Date(r.created_at).toLocaleDateString("es")}</span>
+        </div>
+        ${r.comentario ? `<div class="resena-texto">${esc(r.comentario)}</div>` : ""}
+      </div>`).join("")
+    : `<div class="sin-resenas">Aún no hay reseñas. ¡Sé el primero en opinar!</div>`;
+
+  const formHTML = puedeResenar ? `
+    <div class="form-resena">
+      <h4>Deja tu reseña</h4>
+      <label class="field">
+        <span class="estrellas-label">Tu calificación *</span>
+        <div class="estrellas-input" id="estrellasInput" data-valor="0">
+          <span data-est="1">★</span>
+          <span data-est="2">★</span>
+          <span data-est="3">★</span>
+          <span data-est="4">★</span>
+          <span data-est="5">★</span>
+        </div>
+      </label>
+      <label class="field"><span>Tu nombre *</span><input id="resNombre" maxlength="60" placeholder="Ej: María P."></label>
+      <label class="field"><span>Comentario (opcional)</span><textarea id="resComentario" rows="2" maxlength="300" placeholder="¿Qué te pareció?"></textarea></label>
+      <button class="btn btn-wa" data-a="enviarResena" data-id="${p.id}">Publicar reseña</button>
+    </div>` : `
+    <div class="form-resena" style="text-align:center;color:#7a6889">
+      Ya dejaste tu reseña para este producto. ¡Gracias!
+    </div>`;
+
+  const modal = document.createElement("div");
+  modal.className = "prod-modal";
+  modal.setAttribute("role","dialog");
+  modal.setAttribute("aria-modal","true");
+  modal.innerHTML = `
+    <div class="prod-modal-inner">
+      <button class="cerrar" data-cerrar="1" aria-label="Cerrar">✕</button>
+      <div class="hero-img">${p.img ? `<img src="${esc(p.img)}" alt="${esc(p.nombre)}">` : "🧁"}</div>
+      <div class="content">
+        <h2>${esc(p.nombre)}</h2>
+        ${rs.length ? `<div style="display:flex;align-items:center;gap:8px">${estrellasHTML(prom)} <b style="color:var(--plum)">${prom.toFixed(1)}</b> <span style="color:#7a6889;font-size:.9rem">(${rs.length} ${rs.length === 1 ? "reseña" : "reseñas"})</span></div>` : ""}
+        <div class="precio">${money(p.precio)}</div>
+        <p class="desc">${esc(p.desc)}</p>
+        <div class="prod-actions">
+          <button class="btn btn-wa" data-a="add" data-id="${p.id}" ${p.agotado ? "disabled" : ""} data-cerrar="1">
+            ${p.agotado ? "Agotado" : "Añadir al carrito"}
+          </button>
+        </div>
+      </div>
+      <div class="resenas-seccion">
+        <h3>Reseñas (${rs.length})</h3>
+        <div class="resenas-lista">${resenasHTML}</div>
+        ${formHTML}
+      </div>
+    </div>`;
+
+  document.body.appendChild(modal);
+  document.body.classList.add("modal-open");
+
+  // Selector de estrellas
+  const input = modal.querySelector("#estrellasInput");
+  if(input){
+    input.querySelectorAll("span").forEach(span => {
+      span.addEventListener("click", () => {
+        const val = Number(span.dataset.est);
+        input.dataset.valor = val;
+        input.querySelectorAll("span").forEach(s => {
+          s.classList.toggle("on", Number(s.dataset.est) <= val);
+        });
+      });
+      span.addEventListener("mouseenter", () => {
+        const val = Number(span.dataset.est);
+        input.querySelectorAll("span").forEach(s => {
+          s.classList.toggle("on", Number(s.dataset.est) <= val);
+        });
+      });
+    });
+    input.addEventListener("mouseleave", () => {
+      const val = Number(input.dataset.valor);
+      input.querySelectorAll("span").forEach(s => {
+        s.classList.toggle("on", Number(s.dataset.est) <= val);
+      });
+    });
+  }
+
+  const onEsc = (e) => { if(e.key === "Escape") cerrarProdModal(); };
+  document.addEventListener("keydown", onEsc);
+
+  function cerrarProdModal(){
+    document.removeEventListener("keydown", onEsc);
+    modal.remove();
+    if(!document.querySelector(".prod-modal") && !document.querySelector(".modal-overlay")){
+      document.body.classList.remove("modal-open");
+    }
+  }
+
+  modal.addEventListener("click", (e) => {
+    if(e.target === modal){ cerrarProdModal(); return; }
+    const cerrar = e.target.closest("[data-cerrar]");
+    if(cerrar){
+      if(e.target.closest('[data-a="add"]')){
+        setTimeout(cerrarProdModal, 200);
+      } else {
+        cerrarProdModal();
+      }
+    }
+  });
+
+  // Exponer cerrar para uso interno
+  modal._cerrar = cerrarProdModal;
+}
+
 /* ---------- INICIO ---------- */
 function vInicio(){
 const s=data.settings, tel=waNum();
@@ -173,6 +350,7 @@ ${redes.map(r=>fila(link(r[1]),r[0],"Seguir →",1)).join("")}
 </section>
 <footer>© ${new Date().getFullYear()} ${esc(s.nombre)} · <a href="#admin">Administrar</a></footer></div>`;
 }
+
 /* ---------- CATÁLOGO ---------- */
 function vCatalogo(){
 const cats=data.categorias.filter(c=>data.productos.some(p=>p.cat===c));
@@ -183,14 +361,16 @@ ${cats.length?`<div class="chips" role="group" aria-label="Categorías">
 <button class="chip" data-a="filtro" data-id="" aria-pressed="${!filtro}">Todo</button>
 ${cats.map(c=>`<button class="chip" data-a="filtro" data-id="${esc(c)}" aria-pressed="${filtro===c}">${esc(c)}</button>`).join("")}</div>`:""}
 ${mostrar.map(c=>`<h2 class="cat-title">${esc(c)}</h2><div class="grid">
-${data.productos.filter(p=>p.cat===c).map(p=>`<article class="card">${ph(p)}
+${data.productos.filter(p=>p.cat===c).map(p=>`<article class="card" data-a="abrirProducto" data-id="${p.id}" style="cursor:pointer">${ph(p)}
 <div class="card-b"><h3>${esc(p.nombre)}</h3><p>${esc(p.desc)}</p>
+${lineaRating(p.id)}
 <div class="card-f"><span class="price">${money(p.precio)}</span>
-<button class="add" data-a="add" data-id="${p.id}" ${p.agotado?"disabled":""} aria-label="Añadir ${esc(p.nombre)} al carrito">${ICON_ADD}</button></div></div></article>`).join("")}
+<button class="add" data-stop="1" data-a="add" data-id="${p.id}" ${p.agotado?"disabled":""} aria-label="Añadir ${esc(p.nombre)} al carrito">${ICON_ADD}</button></div></div></article>`).join("")}
 </div>`).join("")}
 ${cats.length?"":`<div class="empty"><h2>Pronto tendremos novedades</h2><p>Todavía no hay productos en el catálogo.</p></div>`}
 </main>`;
 }
+
 /* ---------- CARRITO ---------- */
 function fecha(f){const [y,m,d]=f.split("-");return `${d}/${m}/${y}`}
 function hora12(h){let [H,M]=h.split(":").map(Number);const s=H>=12?"PM":"AM";H=H%12||12;return `${H}:${String(M).padStart(2,"0")} ${s}`}
@@ -217,6 +397,7 @@ ${items.map(({p,q})=>`<div class="line">${ph(p)}<div><b>${esc(p.nombre)}</b><spa
 <p style="text-align:center"><button class="rm" data-a="clear">Vaciar carrito</button></p>
 </main>`;
 }
+
 /* ---------- ADMIN ---------- */
 async function vAdmin(){
 if(!adminOK){
@@ -231,7 +412,7 @@ app.innerHTML=head("Administrar")+`<main class="page" style="max-width:420px"><s
 <p class="note" style="margin-top:14px">Usa el usuario que creaste en Supabase.</p></section></main>`;
 return;
 }
-const tabs=[["productos","Productos"],["categorias","Categorías"],["pedidos","Pedidos"],["ajustes","Ajustes"]];
+const tabs=[["productos","Productos"],["categorias","Categorías"],["pedidos","Pedidos"],["resenas","Reseñas"],["ajustes","Ajustes"]];
 app.innerHTML=head("Panel")+`<main class="page" style="max-width:700px">
 <p class="note">Los cambios se guardan en la nube.</p>
 <div class="tabs">${tabs.map(t=>`<button class="chip" data-a="tab" data-id="${t[0]}" aria-pressed="${tab===t[0]}">${t[1]}</button>`).join("")}
@@ -241,6 +422,7 @@ const tb=$("#tabbody");
 if(tab==="productos")tb.innerHTML=editing!==null?formProd():listaProd();
 if(tab==="categorias")tb.innerHTML=catsHtml();
 if(tab==="pedidos")tb.innerHTML = await pedidosHtml();
+if(tab==="resenas")tb.innerHTML = resenasAdminHtml();
 if(tab==="ajustes")tb.innerHTML=ajustesHtml();
 }
 function listaProd(){
@@ -340,6 +522,65 @@ async function pedidosHtml(){
   }).join("")}
   </section>`;
 }
+function resenasAdminHtml(){
+  const todas = [];
+  for(const [prodId, arr] of Object.entries(data.resenasPorProducto)){
+    const p = data.productos.find(x => String(x.id) === String(prodId));
+    for(const r of arr){
+      todas.push({ ...r, productoNombre: p ? p.nombre : "(producto borrado)" });
+    }
+  }
+
+  if(!todas.length){
+    return `<section class="box"><h2>Reseñas</h2><p>Aún no hay reseñas registradas.</p></section>`;
+  }
+
+  todas.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+  const total = todas.length;
+  const promGeneral = (todas.reduce((a, r) => a + r.estrellas, 0) / total).toFixed(1);
+  const porEstrella = [0,0,0,0,0];
+  todas.forEach(r => porEstrella[r.estrellas - 1]++);
+
+  return `<section class="box">
+    <h2>Reseñas (${total})</h2>
+    <div class="resumen-resenas">
+      <div style="text-align:center;margin-bottom:16px">
+        <div style="font-size:2.2rem;font-weight:700;color:var(--plum);line-height:1">${promGeneral}</div>
+        <div style="color:#7a6889;font-size:.9rem">promedio general</div>
+      </div>
+      <div class="dist-estrellas">
+        ${[5,4,3,2,1].map(n => {
+          const c = porEstrella[n-1];
+          const pct = total ? Math.round((c / total) * 100) : 0;
+          return `<div class="dist-row">
+            <span style="min-width:44px">${n}★</span>
+            <div class="dist-bar"><div class="dist-fill" style="width:${pct}%"></div></div>
+            <span style="min-width:44px;text-align:right;color:#7a6889">${c}</span>
+          </div>`;
+        }).join("")}
+      </div>
+    </div>
+  </section>
+  <section class="box">
+    <h3 style="margin-bottom:12px">Todas las reseñas</h3>
+    ${todas.map(r => `
+      <div class="resena-item" style="margin-bottom:10px">
+        <div class="resena-head">
+          <div>
+            <b>${esc(r.nombre)}</b> ${estrellasHTML(r.estrellas, false)}
+            <div style="color:#7a6889;font-size:.85rem;margin-top:2px">en <b>${esc(r.productoNombre)}</b></div>
+          </div>
+          <span class="resena-fecha">${new Date(r.created_at).toLocaleDateString("es")}</span>
+        </div>
+        ${r.comentario ? `<div class="resena-texto">${esc(r.comentario)}</div>` : ""}
+        <div class="acts" style="margin-top:8px">
+          <button class="btn btn-sm btn-danger" data-a="delresena" data-id="${r.id}">Borrar</button>
+        </div>
+      </div>
+    `).join("")}
+  </section>`;
+}
 function catsHtml(){
 return `<section class="box"><h2>Categorías</h2>
 ${data.categoriasConId.map(c=>{
@@ -368,6 +609,7 @@ ${f("sMon","Moneda",s.moneda)}
 <input id="sFile" class="sr" type="file" accept="image/*" data-change="foto"><small id="sMsg"></small></div>
 <button class="btn" data-a="savesettings">Guardar ajustes</button></section>`;
 }
+
 /* ---------- ACCIONES ---------- */
 const A={
 add(id){const p=data.productos.find(x=>x.id===id);if(!p||p.agotado)return;cart[id]=(cart[id]||0)+1;saveCart();updateBadges();toast(`${p.nombre} añadido al carrito`)},
@@ -386,6 +628,37 @@ async clear(){
   draw();
 },
 filtro(id){filtro=id;draw();window.scrollTo(0,0)},
+abrirProducto(id){ abrirProducto(id); },
+async enviarResena(prodId){
+  const input = document.getElementById("estrellasInput");
+  const estrellas = Number(input?.dataset?.valor || 0);
+  const nombre = (document.getElementById("resNombre")?.value || "").trim();
+  const comentario = (document.getElementById("resComentario")?.value || "").trim();
+
+  if(!estrellas) return toast("Elige cuántas estrellas dar.");
+  if(!nombre) return toast("Escribe tu nombre.");
+  if(nombre.length < 2) return toast("El nombre es muy corto.");
+
+  const { error } = await sb.from("resenas").insert({
+    producto_id: Number(prodId),
+    nombre,
+    estrellas,
+    comentario: comentario || null
+  });
+
+  if(error){
+    toast("Error publicando: " + error.message);
+    return;
+  }
+
+  marcarResenado(prodId);
+  await cargarDesdeSupabase();
+  toast("¡Gracias por tu reseña!");
+
+  // Cerrar el modal actual y reabrirlo actualizado
+  document.querySelectorAll(".prod-modal").forEach(m => m.remove());
+  abrirProducto(prodId);
+},
 async send(){
   const items = cartItems();
   if(!items.length) return toast("Tu carrito está vacío.");
@@ -397,7 +670,6 @@ async send(){
 
   const total = items.reduce((a,x)=>a+x.p.precio*x.q, 0);
 
-  // 1) Construir el mensaje de WhatsApp
   const msg = `Hola, quiero hacer un pedido en ${data.settings.nombre}:\n\n` +
     items.map(x=>`• ${x.q} x ${x.p.nombre} – ${money(x.p.precio*x.q)}`).join("\n") +
     `\n\nTotal: ${money(total)}\n\n` +
@@ -409,7 +681,6 @@ async send(){
 
   const waUrl = `https://wa.me/${waPedidos()}?text=${encodeURIComponent(msg)}`;
 
-  // 2) Guardar en Supabase ANTES de abrir WhatsApp
   const payload = {
     cliente_nombre: ped.nombre.trim(),
     cliente_telefono: ped.telefono.trim(),
@@ -437,10 +708,8 @@ async send(){
     toast("No se pudo guardar en el historial, pero se abrirá WhatsApp.");
   }
 
-  // 3) Abrir WhatsApp
   window.open(waUrl, "_blank", "noopener");
 
-  // 4) Limpiar carrito y datos del pedido
   cart = {};
   saveCart();
   ped = { nombre:"", telefono:"", fecha:"", hora:"", notas:"" };
@@ -608,6 +877,24 @@ async delpedido(id){
   toast("Pedido borrado");
   draw();
 },
+async delresena(id){
+  const ok = await confirmar(
+    "Borrar reseña",
+    "¿Seguro que quieres borrar esta reseña? Esta acción no se puede deshacer.",
+    "Sí, borrar"
+  );
+  if(!ok) return;
+
+  const { error } = await sb.from("resenas").delete().eq("id", Number(id));
+  if(error){
+    toast("Error borrando: " + error.message);
+    return;
+  }
+
+  await cargarDesdeSupabase();
+  toast("Reseña borrada");
+  draw();
+},
 async savesettings(){
   const upd = {
     nombre: $("#sNombre").value.trim() || data.settings.nombre,
@@ -644,7 +931,18 @@ async savesettings(){
   draw();
 }
 };
-document.addEventListener("click",e=>{const b=e.target.closest("[data-a]");if(b&&A[b.dataset.a])A[b.dataset.a](b.dataset.id,b)});
+
+document.addEventListener("click",e=>{
+  // Si el clic fue en un elemento con data-stop, no propagar
+  const stopper = e.target.closest("[data-stop]");
+  if(stopper){
+    e.stopPropagation();
+    if(stopper.dataset.a && A[stopper.dataset.a]) A[stopper.dataset.a](stopper.dataset.id, stopper);
+    return;
+  }
+  const b = e.target.closest("[data-a]");
+  if(b && A[b.dataset.a]) A[b.dataset.a](b.dataset.id, b);
+});
 document.addEventListener("input",e=>{const k=e.target.dataset&&e.target.dataset.ped;if(k)ped[k]=e.target.value});
 document.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.id==="pw")A.login()});
 document.addEventListener("change",e=>{
@@ -680,6 +978,7 @@ if(k==="estado"){
 if(k==="imgprod"&&t.files[0])resize(t.files[0],640,u=>{pendingImg=u;const im=$("#fPrev");im.src=u;im.hidden=false;$("#fMsg").textContent="Foto lista. Toca Guardar para terminar.";toast("Foto lista")});
 if(k==="foto"&&t.files[0])resize(t.files[0],800,u=>{pendingFoto=u;$("#sMsg").textContent="Foto lista. Toca Guardar ajustes.";toast("Foto lista: toca Guardar ajustes")});
 });
+
 /* ---------- RUTAS ---------- */
 const VIEWS={inicio:vInicio,catalogo:vCatalogo,carrito:vCarrito,admin:vAdmin};
 const fromHash=()=>{try{const h=(location.hash||"").slice(1);return VIEWS[h]?h:"inicio"}catch(e){return "inicio"}};
