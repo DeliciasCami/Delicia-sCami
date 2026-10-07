@@ -218,6 +218,25 @@ export function crearAcciones(ctx){
       go("inicio");
     },
 
+    togglePass(){
+      const input = document.getElementById("pw");
+      const icono = document.querySelector(".ojo-icono");
+      if(!input || !icono) return;
+
+      if(input.type === "password"){
+        input.type = "text";
+        icono.textContent = "🙈";
+        icono.dataset.ojo = "abierto";
+        input.setAttribute("aria-label", "Ocultar contraseña");
+      } else {
+        input.type = "password";
+        icono.textContent = "👁️";
+        icono.dataset.ojo = "cerrado";
+        input.setAttribute("aria-label", "Mostrar contraseña");
+      }
+      input.focus();
+    },
+
     // ============================================
     // TABS Y NAVEGACIÓN EN EL PANEL
     // ============================================

@@ -309,3 +309,92 @@ body.modal-open{overflow:hidden}
 .dist-fill{
   height:100%;background:linear-gradient(90deg,#e5b435,#f6d76b);
 }
+
+/* ---------- Aviso de forma de pago ---------- */
+.aviso-pago{
+  display:flex;
+  gap:14px;
+  align-items:flex-start;
+  background:linear-gradient(135deg, #eef6ff 0%, #f6f1fb 100%);
+  border:2px solid #b8c9e8;
+  border-left:6px solid var(--teal);
+  border-radius:14px;
+  padding:16px 18px;
+  margin:16px 0 18px;
+  box-shadow:0 2px 12px rgba(47,158,149,.12);
+}
+.aviso-pago-icono{
+  font-size:1.8rem;
+  line-height:1;
+  flex-shrink:0;
+  margin-top:2px;
+}
+.aviso-pago-texto{
+  flex:1;
+  color:#1e3a5f;
+  font-size:.95rem;
+  line-height:1.5;
+}
+.aviso-pago-texto b{
+  display:block;
+  color:var(--plum);
+  font-size:1rem;
+  margin-bottom:6px;
+}
+.aviso-pago-texto p{
+  margin:0;
+}
+.aviso-pago-texto p b{
+  display:inline;
+  color:var(--teal);
+  font-size:1em;
+  margin:0;
+}
+
+/* ---------- Campo de contraseña con ojo ---------- */
+.campo-password{
+  position:relative;
+  display:flex;
+  align-items:center;
+}
+.campo-password input{
+  width:100%;
+  padding-right:48px !important;
+}
+.ojo{
+  position:absolute;
+  right:6px;
+  top:50%;
+  transform:translateY(-50%);
+  background:none;
+  border:0;
+  cursor:pointer;
+  width:38px;
+  height:38px;
+  border-radius:50%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:0;
+  transition:background .15s;
+}
+.ojo:hover{
+  background:rgba(201,179,232,.25);
+}
+.ojo:active{
+  background:rgba(201,179,232,.45);
+}
+.ojo-icono{
+  font-size:1.15rem;
+  line-height:1;
+  user-select:none;
+  transition:opacity .15s, transform .15s;
+}
+.ojo-icono[data-ojo="cerrado"]{
+  opacity:.5;
+  transform:scale(.95);
+}
+.ojo-icono[data-ojo="abierto"]{
+  opacity:1;
+  transform:scale(1);
+}

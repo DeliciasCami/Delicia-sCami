@@ -93,7 +93,7 @@ ${items.map(({ p, q }) => `<div class="line">${ph(p)}<div><b>${esc(p.nombre)}</b
   <div class="aviso-pago-icono">💳</div>
   <div class="aviso-pago-texto">
     <b>Forma de pago</b>
-    <p>Por el momento <b>solo se acepta transferencia</b>. Al confirmar el pedido se aplicará un <b>15% adicional</b> sobre el total del encargo en concepto de gestión.</p>
+    <p>Si eliges pagar por <b>transferencia</b>, se aplicará un <b>15% adicional</b> sobre el total del pedido en concepto de gestión.</p>
   </div>
 </div>
 
@@ -117,7 +117,15 @@ export async function vAdmin(data, app, ctx){
   if(!ctx.adminOK){
     app.innerHTML = head("Administrar") + `<main class="page" style="max-width:420px"><section class="box"><h2>Entrar al panel</h2>
 <label class="field"><span>Email</span><input type="email" id="email" autocomplete="username" placeholder="tu@correo.com"></label>
-<label class="field"><span>Contraseña</span><input type="password" id="pw" autocomplete="current-password"></label>
+<label class="field">
+  <span>Contraseña</span>
+  <div class="campo-password">
+    <input type="password" id="pw" autocomplete="current-password">
+    <button type="button" class="ojo" data-a="togglePass" aria-label="Mostrar contraseña">
+      <span class="ojo-icono" data-ojo="cerrado">👁️</span>
+    </button>
+  </div>
+</label>
 <button class="btn" data-a="login" style="width:100%">Entrar</button>
 <p class="note" style="margin-top:14px">Usa el usuario que creaste en Supabase.</p></section></main>`;
     return;
