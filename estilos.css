@@ -398,3 +398,119 @@ body.modal-open{overflow:hidden}
   opacity:1;
   transform:scale(1);
 }
+
+/* ---------- Selector de método de pago ---------- */
+.pago-seccion{
+  margin:18px 0 12px;
+}
+.pago-titulo{
+  font-size:1.05rem;
+  color:var(--plum);
+  margin-bottom:10px;
+  font-weight:700;
+}
+.pago-opciones{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+}
+.pago-card{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:6px;
+  padding:16px 12px;
+  border-radius:16px;
+  border:2px solid var(--lila);
+  background:#fff;
+  cursor:pointer;
+  text-align:center;
+  transition:all .18s ease;
+  font:inherit;
+  color:inherit;
+}
+.pago-card:hover{
+  border-color:var(--plum2);
+  transform:translateY(-2px);
+  box-shadow:0 4px 14px rgba(85,48,111,.12);
+}
+.pago-card.activa{
+  border-color:var(--plum);
+  background:linear-gradient(135deg, #f6f1fb 0%, #fbf8fd 100%);
+  box-shadow:0 4px 16px rgba(59,31,82,.18);
+}
+.pago-icono{
+  font-size:1.8rem;
+  line-height:1;
+}
+.pago-nombre{
+  font-weight:700;
+  color:var(--plum);
+  font-size:.95rem;
+}
+.pago-total{
+  font-size:1.15rem;
+  font-weight:700;
+  color:var(--plum);
+  margin-top:2px;
+}
+.pago-detalle{
+  font-size:.78rem;
+  color:#7a6889;
+}
+.pago-card.activa .pago-detalle{
+  color:var(--teal);
+  font-weight:600;
+}
+
+/* ---------- Resumen de pago ---------- */
+.resumen-pago{
+  background:#faf7fd;
+  border-radius:14px;
+  padding:16px 18px;
+  margin:16px 0;
+  border:1px dashed #d9c8ec;
+}
+.resumen-linea{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:5px 0;
+  font-size:.95rem;
+  color:#3c2a4d;
+}
+.resumen-recargo{
+  color:#8a4b1e;
+  font-weight:600;
+}
+.resumen-total{
+  font-size:1.2rem;
+  font-weight:700;
+  color:var(--plum);
+  padding-top:12px;
+  margin-top:6px;
+  border-top:2px solid #e6dcf3;
+}
+.resumen-metodo{
+  text-align:center;
+  color:#7a6889;
+  font-size:.85rem;
+  margin-top:10px;
+}
+.resumen-metodo b{
+  color:var(--plum);
+}
+
+@media(max-width:420px){
+  .pago-opciones{
+    grid-template-columns:1fr;
+  }
+  .pago-card{
+    flex-direction:row;
+    justify-content:space-between;
+    text-align:left;
+    padding:14px 16px;
+  }
+  .pago-icono{font-size:1.5rem}
+  .pago-total{font-size:1.05rem}
+}

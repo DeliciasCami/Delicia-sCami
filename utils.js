@@ -20,7 +20,8 @@ export function DEFAULTS(){
     settings: {
       nombre:"Delicia's Cami", lema:"Repostería hecha con cariño",
       telefono:"+53 5123 8087", pedidos:"", grupo:"",
-      instagram:"", facebook:"", tiktok:"", moneda:"CUP", foto:""
+      instagram:"", facebook:"", tiktok:"", moneda:"CUP", foto:"",
+      recargoTransferencia: 15
     },
     categorias: ["Cakes","Cupcakes","Panes y dulces"],
     categoriasConId: [],
@@ -61,9 +62,9 @@ export let editing = null;
 export let pendingImg = null;
 export let pendingFoto = null;
 export let filtro = "";
-export let ped = { nombre:"", telefono:"", fecha:"", hora:"", notas:"" };
+export let ped = { nombre:"", telefono:"", fecha:"", hora:"", notas:"", metodoPago:"" };
 
-// ---------- Setters (necesarios porque no se pueden reasignar importaciones) ----------
+// ---------- Setters ----------
 export function setData(v){ data = v; }
 export function setCart(v){ cart = v; }
 export function setAdminOK(v){ adminOK = v; }
@@ -73,6 +74,14 @@ export function setPendingImg(v){ pendingImg = v; }
 export function setPendingFoto(v){ pendingFoto = v; }
 export function setFiltro(v){ filtro = v; }
 export function setPed(v){ ped = v; }
+
+// ---------- Getters ----------
+export function getEditing(){ return editing; }
+export function getPendingImg(){ return pendingImg; }
+export function getPendingFoto(){ return pendingFoto; }
+export function getTab(){ return tab; }
+export function getFiltro(){ return filtro; }
+export function getAdminOK(){ return adminOK; }
 
 // ---------- Persistencia del carrito ----------
 export function saveCart(){
@@ -102,6 +111,7 @@ export const waPedidos = (dataRef) => {
   const ref = dataRef || data;
   return ((ref.settings.pedidos || "").replace(/\D/g, "")) || waNum(ref);
 };
+
 export const link = u => { u = (u || "").trim(); return u && !/^https?:\/\//i.test(u) ? "https://" + u : u; };
 export const hoy = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0,10);
 
@@ -113,7 +123,20 @@ export const cartItems = (cartRef, dataRef) => {
     q
   })).filter(x => x.p && !x.p.agotado && x.q > 0);
 };
+
 export const cartCount = (cartRef, dataRef) => cartItems(cartRef, dataRef).reduce((a, x) => a + x.q, 0);
+
+// ---------- Totales con método de pago ----------
+export function calcularTotales(cartRef, dataRef, metodoPago){
+  const d = dataRef || data;
+  const items = cartItems(cartRef, d);
+  const subtotal = items.reduce((a, x) => a + x.p.precio * x.q, 0);
+  const porcentaje = Number(d.settings.recargoTransferencia ?? 15);
+  const aplicaRecargo = metodoPago === "transferencia" && porcentaje > 0;
+  const recargo = aplicaRecargo ? subtotal * (porcentaje / 100) : 0;
+  const total = subtotal + recargo;
+  return { subtotal, porcentaje, aplicaRecargo, recargo, total };
+}
 
 export function updateBadges(){
   document.querySelectorAll("[data-count]").forEach(e => {
@@ -172,9 +195,7 @@ export function ph(p){
   return `<div class="ph">${p.img ? `<img src="${p.img}" alt="${esc(p.nombre)}" loading="lazy">` : "🧁"}${p.agotado ? '<span class="sold">Agotado</span>' : ""}</div>`;
 }
 
-// ============================================
-// Helpers de reseñas
-// ============================================
+// ---------- Helpers de reseñas ----------
 export function resenasDe(prodId, dataRef){
   return dataRef.resenasPorProducto[String(prodId)] || [];
 }
@@ -217,13 +238,3 @@ export function marcarResenado(prodId){
     localStorage.setItem("deliciascami_resenas", JSON.stringify(arr));
   }catch(e){}
 }
-
-// ============================================
-// Getters para variables que necesitan leerse desde acciones
-// ============================================
-export function getEditing(){ return editing; }
-export function getPendingImg(){ return pendingImg; }
-export function getPendingFoto(){ return pendingFoto; }
-export function getTab(){ return tab; }
-export function getFiltro(){ return filtro; }
-export function getAdminOK(){ return adminOK; }

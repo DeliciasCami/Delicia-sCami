@@ -2,10 +2,10 @@
 // Acciones del objeto A (handlers de eventos)
 // ============================================
 import {
-  $, esc, toast, money, hoy, fecha, hora12,
+  $, toast, money, hoy, fecha, hora12,
   saveCart, cartItems, updateBadges,
-  yaReseno, marcarResenado,
-  setCart, setPed, setData, setAdminOK, setEditing, setPendingImg, setPendingFoto, setTab
+  marcarResenado, calcularTotales,
+  setCart, setPed, setAdminOK, setEditing, setPendingImg, setPendingFoto, setTab
 } from "./utils.js";
 
 import { confirmar, abrirProducto as abrirProductoModal } from "./modales.js";
@@ -17,15 +17,16 @@ import {
   crearResena, borrarResena,
   actualizarSettings,
   subirImagen,
-  cargarDesdeSupabase
+  cargarDesdeSupabase,
+  actualizarAgotado,
+  actualizarEstadoPedido
 } from "./supabase-data.js";
 
 // ============================================
 // Fábrica de acciones
-// Recibe el contexto mutable: getData, getCart, getPed, getSb, draw, go
 // ============================================
 export function crearAcciones(ctx){
-  const { getData, getCart, getPed, getSb, draw, go, setPedFromInput } = ctx;
+  const { getData, getCart, getPed, getSb, draw, go } = ctx;
 
   return {
     // ============================================
@@ -72,15 +73,24 @@ export function crearAcciones(ctx){
       );
       if(!ok) return;
       setCart({});
+      setPed({ ...getPed(), metodoPago: "" });
       saveCart();
       draw();
     },
 
     filtro(id){
-      const { setFiltro } = ctx;
-      setFiltro(id);
+      ctx.setFiltro(id);
       draw();
       window.scrollTo(0, 0);
+    },
+
+    // ============================================
+    // MÉTODO DE PAGO
+    // ============================================
+    metodoPago(id){
+      const ped = getPed();
+      setPed({ ...ped, metodoPago: id });
+      draw();
     },
 
     // ============================================
@@ -119,7 +129,6 @@ export function crearAcciones(ctx){
       await cargarDesdeSupabase(getData());
       toast("¡Gracias por tu reseña!");
 
-      // Cerrar el modal actual y reabrirlo actualizado
       document.querySelectorAll(".prod-modal").forEach(m => m.remove());
       abrirProductoModal(prodId, getData());
     },
@@ -139,12 +148,21 @@ export function crearAcciones(ctx){
       if(!ped.fecha) return toast("Elige la fecha en que quieres tu pedido.");
       if(ped.fecha < hoy()) return toast("Esa fecha ya pasó. Elige otra.");
       if(!ped.hora) return toast("Elige la hora.");
+      if(!ped.metodoPago) return toast("Elige el método de pago.");
 
-      const total = items.reduce((a, x) => a + x.p.precio * x.q, 0);
+      const metodo = ped.metodoPago;
+      const { subtotal, porcentaje, aplicaRecargo, recargo, total } = calcularTotales(cart, data, metodo);
 
-      const msg = `Hola, quiero hacer un pedido en ${data.settings.nombre}:\n\n` +
+      const metodoTexto = metodo === "efectivo" ? "Efectivo" : `Transferencia (+${porcentaje}%)`;
+
+      let msg = `Hola, quiero hacer un pedido en ${data.settings.nombre}:\n\n` +
         items.map(x => `• ${x.q} x ${x.p.nombre} – ${money(x.p.precio * x.q, data)}`).join("\n") +
-        `\n\nTotal: ${money(total, data)}\n\n` +
+        `\n\nSubtotal: ${money(subtotal, data)}`;
+      if(aplicaRecargo){
+        msg += `\nRecargo por transferencia (${porcentaje}%): +${money(recargo, data)}`;
+      }
+      msg += `\n*Total a pagar: ${money(total, data)}*\n` +
+        `Método de pago: ${metodoTexto}\n\n` +
         `Nombre: ${ped.nombre.trim()}\n` +
         `Teléfono: ${ped.telefono.trim()}\n` +
         `Fecha: ${fecha(ped.fecha)}\n` +
@@ -166,8 +184,11 @@ export function crearAcciones(ctx){
           precio: x.p.precio,
           subtotal: x.p.precio * x.q
         })),
-        total,
+        subtotal: Number(subtotal.toFixed(2)),
+        recargo: Number(recargo.toFixed(2)),
+        total: Number(total.toFixed(2)),
         moneda: data.settings.moneda,
+        metodo_pago: metodo,
         whatsapp_url: waUrl,
         estado: "nuevo"
       };
@@ -184,7 +205,7 @@ export function crearAcciones(ctx){
 
       setCart({});
       saveCart();
-      setPed({ nombre: "", telefono: "", fecha: "", hora: "", notas: "" });
+      setPed({ nombre: "", telefono: "", fecha: "", hora: "", notas: "", metodoPago: "" });
 
       toast("Pedido enviado. ¡Gracias!");
       draw();
@@ -210,14 +231,6 @@ export function crearAcciones(ctx){
       toast("¡Bienvenida!");
     },
 
-    async logout(){
-      const sb = getSb();
-      await sb.auth.signOut();
-      setAdminOK(false);
-      setEditing(null);
-      go("inicio");
-    },
-
     togglePass(){
       const input = document.getElementById("pw");
       const icono = document.querySelector(".ojo-icono");
@@ -227,14 +240,20 @@ export function crearAcciones(ctx){
         input.type = "text";
         icono.textContent = "🙈";
         icono.dataset.ojo = "abierto";
-        input.setAttribute("aria-label", "Ocultar contraseña");
       } else {
         input.type = "password";
         icono.textContent = "👁️";
         icono.dataset.ojo = "cerrado";
-        input.setAttribute("aria-label", "Mostrar contraseña");
       }
       input.focus();
+    },
+
+    async logout(){
+      const sb = getSb();
+      await sb.auth.signOut();
+      setAdminOK(false);
+      setEditing(null);
+      go("inicio");
     },
 
     // ============================================
@@ -268,7 +287,6 @@ export function crearAcciones(ctx){
     // PRODUCTOS
     // ============================================
     async saveprod(){
-      const data = getData();
       const nombre = $("#fNombre").value.trim();
       const precio = parseFloat($("#fPrecio").value);
       const catId = $("#fCat").value;
@@ -442,6 +460,12 @@ export function crearAcciones(ctx){
       const data = getData();
       const pendingFoto = ctx.getPendingFoto();
 
+      const recargoRaw = $("#sRecargo").value.trim();
+      const recargoNum = recargoRaw === "" ? 0 : parseFloat(recargoRaw);
+      if(isNaN(recargoNum) || recargoNum < 0 || recargoNum > 100){
+        return toast("El recargo debe ser un número entre 0 y 100.");
+      }
+
       const upd = {
         nombre: $("#sNombre").value.trim() || data.settings.nombre,
         lema: $("#sLema").value.trim(),
@@ -451,7 +475,8 @@ export function crearAcciones(ctx){
         instagram: $("#sIg").value.trim(),
         facebook: $("#sFb").value.trim(),
         tiktok: $("#sTt").value.trim(),
-        moneda: $("#sMon").value.trim() || "CUP"
+        moneda: $("#sMon").value.trim() || "CUP",
+        recargo_transferencia: recargoNum
       };
 
       if(pendingFoto){
@@ -479,7 +504,6 @@ export function crearAcciones(ctx){
     // CAMBIOS EN INPUTS (change)
     // ============================================
     async agotado(id, agotado){
-      const { actualizarAgotado } = await import("./supabase-data.js");
       const { error } = await actualizarAgotado(id, agotado);
       if(error){
         toast("Error actualizando: " + error.message);
@@ -492,7 +516,6 @@ export function crearAcciones(ctx){
     },
 
     async estado(id, nuevoEstado){
-      const { actualizarEstadoPedido } = await import("./supabase-data.js");
       const { error } = await actualizarEstadoPedido(id, nuevoEstado);
       if(error){
         toast("Error actualizando: " + error.message);

@@ -4,9 +4,6 @@
 import { sb } from "./supabase.js";
 import { DEFAULTS, toast } from "./utils.js";
 
-// ============================================
-// Cargar TODOS los datos (categorías, productos, settings, reseñas)
-// ============================================
 export async function cargarDesdeSupabase(dataRef){
   try{
     const [cats, prods, sett, res] = await Promise.all([
@@ -47,7 +44,8 @@ export async function cargarDesdeSupabase(dataRef){
       facebook: sett.data.facebook || "",
       tiktok: sett.data.tiktok || "",
       moneda: sett.data.moneda || "CUP",
-      foto: sett.data.foto_url || ""
+      foto: sett.data.foto_url || "",
+      recargoTransferencia: Number(sett.data.recargo_transferencia ?? 15)
     };
 
     dataRef.resenasPorProducto = {};
@@ -132,7 +130,7 @@ export async function actualizarSettings(payload){
 }
 
 // ============================================
-// STORAGE — Subir imagen
+// STORAGE
 // ============================================
 export async function subirImagen(dataUrl, path){
   const blob = await (await fetch(dataUrl)).blob();

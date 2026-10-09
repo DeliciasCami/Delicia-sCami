@@ -2,9 +2,9 @@
 // Todas las vistas de la aplicación
 // ============================================
 import {
-  esc, money, waNum, waPedidos, link, hoy, cartItems, cartCount,
+  esc, money, waNum, link, hoy, cartItems, cartCount,
   updateBadges, fecha, hora12, ICON_ADD, head, ph,
-  lineaRating, estrellasHTML
+  lineaRating, estrellasHTML, calcularTotales
 } from "./utils.js";
 
 import { listarPedidos } from "./supabase-data.js";
@@ -68,18 +68,26 @@ ${cats.length ? "" : `<div class="empty"><h2>Pronto tendremos novedades</h2><p>T
 // ============================================
 export function vCarrito(data, cart, ped, app){
   const items = cartItems(cart, data);
-  const total = items.reduce((a, x) => a + x.p.precio * x.q, 0);
 
   if(!items.length){
     app.innerHTML = head("Mi carrito") + `<main class="page"><div class="empty"><h2>Tu carrito está vacío</h2><p>Elige tus dulces favoritos en el catálogo.</p><a class="btn" href="#catalogo">Ver catálogo</a></div></main>`;
     return;
   }
 
+  const metodo = ped.metodoPago || "";
+  const { subtotal, porcentaje, aplicaRecargo, recargo, total } = calcularTotales(cart, data, metodo);
+
+  const metodoTexto = (m) => {
+    if(m === "efectivo") return "Efectivo";
+    if(m === "transferencia") return "Transferencia";
+    return "";
+  };
+
   app.innerHTML = head("Mi carrito") + `<main class="page" style="max-width:640px">
 ${items.map(({ p, q }) => `<div class="line">${ph(p)}<div><b>${esc(p.nombre)}</b><span>${money(p.precio, data)}</span>
 <div class="qty"><button data-a="dec" data-id="${p.id}" aria-label="Quitar uno">−</button><span>${q}</span><button data-a="inc" data-id="${p.id}" aria-label="Añadir uno">+</button></div></div>
 <div><div class="sub">${money(p.precio * q, data)}</div><button class="rm" data-a="rm" data-id="${p.id}">Quitar</button></div></div>`).join("")}
-<div class="total"><span>Total</span><span>${money(total, data)}</span></div>
+
 <section class="box"><h2>Datos de tu pedido</h2>
 <label class="field"><span>Tu nombre</span><input data-ped="nombre" value="${esc(ped.nombre)}" autocomplete="name"></label>
 <label class="field"><span>Tu teléfono</span><input data-ped="telefono" value="${esc(ped.telefono)}" inputmode="tel" autocomplete="tel" placeholder="+53 5123 4567"></label>
@@ -89,12 +97,39 @@ ${items.map(({ p, q }) => `<div class="line">${ph(p)}<div><b>${esc(p.nombre)}</b
 </div>
 <label class="field"><span>Notas (opcional)</span><textarea rows="3" data-ped="notas" placeholder="Sabor, dedicatoria, dirección de entrega...">${esc(ped.notas)}</textarea></label>
 
-<div class="aviso-pago">
-  <div class="aviso-pago-icono">💳</div>
-  <div class="aviso-pago-texto">
-    <b>Forma de pago</b>
-    <p>Si eliges pagar por <b>transferencia</b>, se aplicará un <b>15% adicional</b> sobre el total del pedido en concepto de gestión.</p>
+<div class="pago-seccion">
+  <h3 class="pago-titulo">¿Cómo quieres pagar?</h3>
+  <div class="pago-opciones">
+    <button type="button" class="pago-card ${metodo === "efectivo" ? "activa" : ""}" data-a="metodoPago" data-id="efectivo">
+      <div class="pago-icono">💵</div>
+      <div class="pago-nombre">Efectivo</div>
+      <div class="pago-total">${money(subtotal, data)}</div>
+      <div class="pago-detalle">Sin recargos</div>
+    </button>
+    <button type="button" class="pago-card ${metodo === "transferencia" ? "activa" : ""}" data-a="metodoPago" data-id="transferencia">
+      <div class="pago-icono">💳</div>
+      <div class="pago-nombre">Transferencia</div>
+      <div class="pago-total">${money(subtotal + subtotal * (porcentaje / 100), data)}</div>
+      <div class="pago-detalle">+${porcentaje}% de gestión</div>
+    </button>
   </div>
+</div>
+
+<div class="resumen-pago" ${metodo ? "" : 'style="display:none"'}>
+  <div class="resumen-linea">
+    <span>Subtotal</span>
+    <span>${money(subtotal, data)}</span>
+  </div>
+  ${metodo === "transferencia" && aplicaRecargo ? `
+  <div class="resumen-linea resumen-recargo">
+    <span>Recargo por transferencia (${porcentaje}%)</span>
+    <span>+${money(recargo, data)}</span>
+  </div>` : ""}
+  <div class="resumen-linea resumen-total">
+    <span>Total a pagar</span>
+    <span>${money(metodo ? total : subtotal, data)}</span>
+  </div>
+  <div class="resumen-metodo">Método: <b>${metodoTexto(metodo)}</b></div>
 </div>
 
 <button class="btn btn-wa" data-a="send">Enviar pedido por WhatsApp</button>
@@ -107,7 +142,7 @@ ${items.map(({ p, q }) => `<div class="line">${ph(p)}<div><b>${esc(p.nombre)}</b
 // ADMIN
 // ============================================
 export async function vAdmin(data, app, ctx){
-  const { adminOK, sb, setAdminOK, tab, editing, draw } = ctx;
+  const { adminOK, sb, setAdminOK, tab, editing } = ctx;
 
   if(!adminOK){
     const { data: { session } } = await sb.auth.getSession();
@@ -221,6 +256,12 @@ async function pedidosHtml(data){
     cancelado: { txt: "Cancelado", clase: "chip chip-cancel" }
   };
 
+  const metodoLabel = (m) => {
+    if(m === "efectivo") return "💵 Efectivo";
+    if(m === "transferencia") return "💳 Transferencia";
+    return "—";
+  };
+
   return `<section class="box"><h2>Pedidos (${pedidos.length})</h2>
   <p style="margin:0 0 14px;color:#5b4a69;font-size:.9rem">Los más recientes aparecen primero.</p>
   ${pedidos.map(p => {
@@ -236,6 +277,10 @@ async function pedidosHtml(data){
     const telLimpio = (p.cliente_telefono || "").replace(/\D/g, "");
     const waCliente = telLimpio ? `https://wa.me/${telLimpio}` : "";
 
+    const metodo = p.metodo_pago || "";
+    const recargo = Number(p.recargo || 0);
+    const subtotalPedido = Number(p.subtotal || p.total || 0);
+
     return `<div class="pedido-card">
       <div class="pedido-head">
         <div>
@@ -250,6 +295,8 @@ async function pedidosHtml(data){
 
       <div class="pedido-info">
         <div><b>Entrega:</b> ${fechaEntrega} a las ${horaEntrega}</div>
+        <div><b>Método de pago:</b> ${metodoLabel(metodo)}</div>
+        ${recargo > 0 ? `<div><b>Subtotal:</b> ${subtotalPedido.toLocaleString("es")} ${esc(p.moneda)} · <b>Recargo:</b> +${recargo.toLocaleString("es")} ${esc(p.moneda)}</div>` : ""}
         <div><b>Total:</b> <span class="price">${Number(p.total).toLocaleString("es")} ${esc(p.moneda)}</span></div>
         <div><b>Pedido:</b><br>${listaProd}</div>
         ${p.notas ? `<div><b>Notas:</b> ${esc(p.notas)}</div>` : ""}
@@ -334,6 +381,8 @@ function ajustesHtml(data){
   const f = (id, label, val, extra = "") =>
     `<label class="field"><span>${label}</span><input id="${id}" value="${esc(val)}" ${extra}></label>`;
 
+  const recargo = s.recargoTransferencia ?? 15;
+
   return `<section class="box"><h2>Ajustes</h2>
 ${f("sNombre", "Nombre del negocio", s.nombre)}
 ${f("sLema", "Frase debajo del nombre", s.lema)}
@@ -344,6 +393,7 @@ ${f("sIg", "Instagram (enlace)", s.instagram)}
 ${f("sFb", "Facebook (enlace)", s.facebook)}
 ${f("sTt", "TikTok (enlace)", s.tiktok)}
 ${f("sMon", "Moneda", s.moneda)}
+<label class="field"><span>Recargo por transferencia (%)</span><input id="sRecargo" type="number" min="0" max="100" step="any" inputmode="decimal" value="${esc(recargo)}"><small>Porcentaje que se suma al total cuando el cliente elige transferencia. Ejemplo: 15</small></label>
 <div class="field"><span>Mi foto</span>
 <label class="btn btn-line btn-sm" for="sFile" style="cursor:pointer">Cambiar mi foto</label>
 <input id="sFile" class="sr" type="file" accept="image/*" data-change="foto"><small id="sMsg"></small></div>

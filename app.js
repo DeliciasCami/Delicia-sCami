@@ -14,14 +14,8 @@ import { crearAcciones } from "./acciones.js";
 import { draw, go, initRouter } from "./router.js";
 import { cargarDesdeSupabase } from "./supabase-data.js";
 
-// ============================================
-// Estado del filtro (vive fuera de utils para mantener simple el estado)
-// ============================================
 let filtroActual = "";
 
-// ============================================
-// Contexto compartido
-// ============================================
 const ctx = {
   getData: () => data,
   getCart: () => cart,
@@ -44,19 +38,9 @@ const ctx = {
   draw
 };
 
-// ============================================
-// Crear acciones
-// ============================================
-const A = crearAcciones({
-  ...ctx,
-  go
-});
-
+const A = crearAcciones({ ...ctx, go });
 window.__A = A;
 
-// ============================================
-// Listeners globales
-// ============================================
 document.addEventListener("click", e => {
   const stopper = e.target.closest("[data-stop]");
   if(stopper){
@@ -92,8 +76,7 @@ document.addEventListener("change", e => {
   }
 
   if(k === "estado"){
-    const id = t.dataset.id;
-    A.estado(id, t.value);
+    A.estado(t.dataset.id, t.value);
   }
 
   if(k === "imgprod" && t.files[0]){
@@ -117,9 +100,6 @@ document.addEventListener("change", e => {
   }
 });
 
-// ============================================
-// Arranque
-// ============================================
 (async () => {
   const ok = await cargarDesdeSupabase(data);
   initRouter(ctx);
